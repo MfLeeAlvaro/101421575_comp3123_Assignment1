@@ -1,0 +1,19 @@
+﻿# Node
+JS
+node_module/
+npm-debug.log*
+env
+.env.local
+# OS
+ editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Builds / logs
+dist/
+build/
+coverage/
+*.log
+
