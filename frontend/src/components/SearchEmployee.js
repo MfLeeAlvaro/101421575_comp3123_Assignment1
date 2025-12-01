@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Container,
   Paper,
@@ -24,16 +24,37 @@ import { employeeAPI } from '../services/api';
 
 const SearchEmployee = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useState({
     department: '',
     position: '',
   });
   const [searchTriggered, setSearchTriggered] = useState(false);
+  const [actualSearchParams, setActualSearchParams] = useState({});
 
-  const { data: employees = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['employees', 'search', searchParams],
-    queryFn: () => employeeAPI.search(searchParams).then((res) => res.data),
-    enabled: false, // Don't run automatically
+  const { data: employees = [], isLoading, error } = useQuery({
+    queryKey: ['employees', 'search', JSON.stringify(actualSearchParams)],
+    queryFn: async () => {
+      // Use actualSearchParams directly
+      const params = { ...actualSearchParams };
+      
+      // If both params are empty, use getAll() to get all employees
+      // Otherwise use search() with the filters
+      if (Object.keys(params).length === 0 || (!params.department && !params.position)) {
+        return employeeAPI.getAll().then((res) => res.data);
+      } else {
+        // Ensure we only send non-empty values
+        const searchParams = {};
+        if (params.department && params.department.trim() !== '') {
+          searchParams.department = params.department;
+        }
+        if (params.position && params.position.trim() !== '') {
+          searchParams.position = params.position;
+        }
+        return employeeAPI.search(searchParams).then((res) => res.data);
+      }
+    },
+    enabled: searchTriggered, // Only run when search is triggered
   });
 
   const handleChange = (e) => {
@@ -41,13 +62,29 @@ const SearchEmployee = () => {
     setSearchParams((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSearch = () => {
-    if (!searchParams.department && !searchParams.position) {
-      alert('Please enter at least one search criteria (department or position)');
-      return;
+  const [pendingParams, setPendingParams] = useState(null);
+
+  // Trigger search when actualSearchParams is updated
+  useEffect(() => {
+    if (pendingParams !== null) {
+      setActualSearchParams(pendingParams);
+      setPendingParams(null);
+      setSearchTriggered(true);
     }
-    setSearchTriggered(true);
-    refetch();
+  }, [pendingParams]);
+
+  const handleSearch = () => {
+    // Filter out empty strings
+    const params = {};
+    if (searchParams.department && searchParams.department.trim() !== '') {
+      params.department = searchParams.department;
+    }
+    if (searchParams.position && searchParams.position.trim() !== '') {
+      params.position = searchParams.position;
+    }
+    
+    // Set pending params - useEffect will handle setting actualSearchParams and searchTriggered
+    setPendingParams(params);
   };
 
   const getImageUrl = (profilePicture) => {
@@ -58,8 +95,9 @@ const SearchEmployee = () => {
     return `${baseUrl}${profilePicture}`;
   };
 
-  const departments = ['IT', 'HR', 'Finance', 'Marketing', 'Sales', 'Operations', 'Engineering'];
-  const positions = [
+  // Hardcoded default departments and positions
+  const defaultDepartments = ['IT', 'HR', 'Finance', 'Marketing', 'Sales', 'Operations', 'Engineering'];
+  const defaultPositions = [
     'Manager',
     'Developer',
     'Designer',
@@ -69,6 +107,20 @@ const SearchEmployee = () => {
     'Engineer',
     'Specialist',
   ];
+
+  // Fetch departments and positions from the API
+  const { data: filtersData } = useQuery({
+    queryKey: ['filters'],
+    queryFn: () => employeeAPI.getFilters().then((res) => res.data),
+  });
+
+  // Combine hardcoded with dynamic, remove duplicates, and sort
+  const departments = [
+    ...new Set([...defaultDepartments, ...(filtersData?.departments || [])])
+  ].sort();
+  const positions = [
+    ...new Set([...defaultPositions, ...(filtersData?.positions || [])])
+  ].sort();
 
   return (
     <Container maxWidth="lg">

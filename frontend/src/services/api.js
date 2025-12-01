@@ -46,6 +46,7 @@ export const authAPI = {
 export const employeeAPI = {
   getAll: () => api.get('/api/v1/emp/employees'),
   getById: (id) => api.get(`/api/v1/emp/employees/${id}`),
+  getFilters: () => api.get('/api/v1/emp/employees/filters'),
   create: (data) => {
     const formData = new FormData();
     Object.keys(data).forEach((key) => {
